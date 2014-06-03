@@ -11,7 +11,7 @@ class ComponentUpdater
 
   update: ->
     # Remove the old exports.getComponent
-    @source = @source.replace /\nexports.getComponent\s*=.+?\n/, ''
+    @source = @source.replace /\nexports.getComponent\s*=.+?(\n|$)/, ''
     # Replace class with a noflo.Component instance
     @source = @source.replace /^class\s+(\w+)\s+extends\s+noflo\.((Async)?Component)\s*$/m, (str, name, cls) =>
       @name = name
