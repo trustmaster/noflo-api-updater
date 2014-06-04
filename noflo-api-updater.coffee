@@ -34,6 +34,12 @@ class ComponentUpdater
 
   updateConstructor: (constructor) ->
     # Remove old ports definition and grab their data
+    re = /\n\s{4}@inPorts\s*=\s*\n([\s\S]+?)(\r?\n\s{4}\S|$)/
+    unless re.test constructor
+      console.error "(!) No old-style @inPorts found in #{@name}, leaving constructor as is"
+      # Outdent the leftover
+      constructor = constructor.replace /(^|\n)(\s{2})\s{2}/g, '$1$2'
+      return constructor
     constructor = constructor.replace /\n\s{4}@inPorts\s*=\s*\r?\n([\s\S]+?)(\r?\n\s{4}\S|$)/, (str, body, postfix) =>
       @grabInPorts body
       return postfix
