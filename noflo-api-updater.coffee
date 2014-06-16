@@ -24,7 +24,7 @@ class ComponentUpdater
 
       """
     # Rebuild the constructor
-    @source = @source.replace /constructor:\s*->\s*\r?\n([\s\S]+?)(\r?\n\s{2}\S|$)/, (str, constructor, postfix) =>
+    @source = @source.replace /constructor:\s*->\s*\r?\n([\s\S]+?)(\r?\n {2}\S|$)/, (str, constructor, postfix) =>
       return @updateConstructor(constructor) + postfix
     # Replace '@' with 'component.'
     @source = @source.replace /(\W)@(\w+)/g, '$1component.$2'
@@ -34,25 +34,26 @@ class ComponentUpdater
 
   updateConstructor: (constructor) ->
     # Remove old ports definition and grab their data
-    re = /\n\s{4}@inPorts\s*=\s*\n([\s\S]+?)(\r?\n\s{4}\S|$)/
+    re = /(?:^|\n) {4}@inPorts\s*=\s*\n([\s\S]+?)(\r?\n {4}\S|$)/
     unless re.test constructor
       console.error "(!) No old-style @inPorts found in #{@name}, leaving constructor as is"
+      console.log '(i) ctor:', constructor
       # Outdent the leftover
-      constructor = constructor.replace /(^|\n)(\s{2})\s{2}/g, '$1$2'
+      constructor = constructor.replace /(^|\n)( {2}) {2}/g, '$1$2'
       return constructor
-    constructor = constructor.replace /\n\s{4}@inPorts\s*=\s*\r?\n([\s\S]+?)(\r?\n\s{4}\S|$)/, (str, body, postfix) =>
+    constructor = constructor.replace /(?:^|\n) {4}@inPorts\s*=\s*\r?\n([\s\S]+?)(\r?\n {4}\S|$)/, (str, body, postfix) =>
       @grabInPorts body
       return postfix
-    constructor = constructor.replace /\n\s{4}@outPorts\s*=\s*\r?\n([\s\S]+?)(\r?\n\s{4}\S|$)/, (str, body, postfix) =>
+    constructor = constructor.replace /(?:^|\n) {4}@outPorts\s*=\s*\r?\n([\s\S]+?)(\r?\n {4}\S|$)/, (str, body, postfix) =>
       @grabOutPorts body
       return postfix
     # Remove old event listeners and grab their contents
-    re = /\n\s{4}@inPorts\.(\w+)\.on\s+(["']([\w]+)["']),\s*(.*?)\s*[=-]>\s*(\r?\n {6}([\s\S]+?))?(\r?\n {4}\S|\s*$)/
+    re = /(?:^|\n) {4}@inPorts\.(\w+)\.on\s+(["']([\w]+)["']),\s*(.*?)\s*[=-]>\s*(\r?\n {6}([\s\S]+?))?(\r?\n {4}\S|\s*$)/
     while m = re.exec constructor
       @grabListener m[1], m[3], m[4], m[6]
       constructor = constructor.replace m[0], m[7]
     # Outdent the leftover
-    constructor = constructor.replace /(^|\n)(\s{2})\s{2}/g, '$1$2'
+    constructor = constructor.replace /(^|\n)( {2}) {2}/g, '$1$2'
     # Compile a new constructor
     return @makePorts() + constructor
 
@@ -95,7 +96,7 @@ class ComponentUpdater
           code += ", (event, payload) ->\n    switch event\n"
           for evt, body of @listeners[name]
             # Increase body indent
-            body = body.replace /(^|\n)(\s{2})/g, '$1$2  '
+            body = body.replace /(^|\n)( {2})/g, '$1$2  '
             code += "      when '#{evt}'\n        #{body}\n"
       else
         code += "\n"

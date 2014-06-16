@@ -23,6 +23,8 @@ Then install the updater tool
 
 ## Usage
 
+_Note: the tool assumes that components are written in CoffeeScript indented correctly with 2 spaces. Tab or 4-space indentation, or JavaScript components are not supported at this time._
+
 Updating a single `*.coffee` file:
 
 ```
