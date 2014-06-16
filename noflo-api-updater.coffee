@@ -47,10 +47,10 @@ class ComponentUpdater
       @grabOutPorts body
       return postfix
     # Remove old event listeners and grab their contents
-    re = /\n\s{4}@inPorts\.(\w+)\.on\s+(["']([\w]+)["']),\s*(.*?)\s*[=-]>\s*\r?\n([\s\S]+?)(\r?\n\s{4}\S|$)/
+    re = /\n\s{4}@inPorts\.(\w+)\.on\s+(["']([\w]+)["']),\s*(.*?)\s*[=-]>\s*(\r?\n {6}([\s\S]+?))?(\r?\n {4}\S|\s*$)/
     while m = re.exec constructor
-      @grabListener m[1], m[3], m[4], m[5]
-      constructor = constructor.replace m[0], m[6]
+      @grabListener m[1], m[3], m[4], m[6]
+      constructor = constructor.replace m[0], m[7]
     # Outdent the leftover
     constructor = constructor.replace /(^|\n)(\s{2})\s{2}/g, '$1$2'
     # Compile a new constructor
@@ -72,8 +72,12 @@ class ComponentUpdater
 
   grabListener: (port, evt, args, body) ->
     @listeners[port] = {} unless port of @listeners
-    m = /\((\w+)\)/.exec args
-    body = body.replace m[1], 'payload' if m
+    m = /\((@)?(\w+)\)/.exec args
+    body = '' if body is undefined
+    body = body.replace m[2], 'payload' if m
+    if m[1]
+      prefix = "component.#{m[2]} = payload"
+      body = if body then prefix + "\n      " + body else prefix
     body = body.replace /^\s+/, ''
     @listeners[port][evt] = body
 
