@@ -2,7 +2,7 @@
   "name": "noflo-api-updater",
   "description": "A tool to update NoFlo components to latest API",
   "author": "Vladimir Sibirov <trustmaster@kodigy.com>",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "license": "MIT",
   "engines": {
     "node": ">=0.8.0"
