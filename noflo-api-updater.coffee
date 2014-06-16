@@ -37,7 +37,6 @@ class ComponentUpdater
     re = /(?:^|\n) {4}@inPorts\s*=\s*\n([\s\S]+?)(\r?\n {4}\S|$)/
     unless re.test constructor
       console.error "(!) No old-style @inPorts found in #{@name}, leaving constructor as is"
-      console.log '(i) ctor:', constructor
       # Outdent the leftover
       constructor = constructor.replace /(^|\n)( {2}) {2}/g, '$1$2'
       return constructor
