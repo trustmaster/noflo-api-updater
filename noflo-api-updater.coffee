@@ -74,10 +74,12 @@ class ComponentUpdater
     @listeners[port] = {} unless port of @listeners
     m = /\((@)?(\w+)\)/.exec args
     body = '' if body is undefined
-    body = body.replace m[2], 'payload' if m
-    if m and m[1]
-      prefix = "component.#{m[2]} = payload"
-      body = if body then prefix + "\n      " + body else prefix
+    if m
+      re = RegExp '([^\\w@]|^)' + m[2] + '\\b'
+      body = body.replace re, '$1payload'
+      if m[1]
+        prefix = "component.#{m[2]} = payload"
+        body = if body then prefix + "\n      " + body else prefix
     body = body.replace /^\s+/, ''
     @listeners[port][evt] = body
 
