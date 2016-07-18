@@ -1,5 +1,254 @@
 #!/usr/bin/env coffee
 fs = require 'fs'
+indentString = require 'indent-string'
+cs = require 'coffee-script'
+
+indent = (indent) ->
+  string = ""
+  for i in [0...indent]
+    string += "  "
+  string
+
+#
+# @TODO: could use args[0] of wirepattern to name first port if it isn't `data, payload, input` ?
+#
+# @TODO: with in port `measurement` this would use
+# , (payload, groups, out, callback) ->
+#    unless payload?.measurement?
+#
+# @TODO: if using wirepattern
+# `(input, groups, out, callback) -> console.log input`
+# should replace `input` or whatever name of var is with the 1 required `in`
+#
+# @TODO: option to just convert in/out ports
+# @TODO: convert stateful components which set things for param ports
+#
+class WirePatternComponentUpdater
+  constructor: (@source) ->
+
+  update: ->
+    @updateWirePattern @source
+
+  getFilteredPorts: (ports) ->
+    filteredPorts = {}
+    for port, value of ports
+      continue if port is 'ports'
+      continue if typeof value isnt 'object'
+      continue unless value?
+      filteredPorts[port] = value.options
+    filteredPorts
+
+  portsToString: (ports) ->
+    portsStr = ""
+    for port, options of ports
+      continue if port is 'ports'
+      portsStr += indent(2) + port + ":\n"
+      for option, value of options
+        continue if option in ['buffered', 'required', 'triggering']
+        continue if option is 'control' and value is false
+        if typeof value is 'string'
+          value = "'#{value}'"
+        portsStr += indent(3) + option + ": " + value + "\n"
+    portsStr
+
+  preconditionGet: (source, ins, outs, inPorts, params) ->
+    precondition = ""
+    getDataString = "["
+    getPortData = []
+    mustHave = []
+
+    for port in ins
+      mustHave.push port
+      getPortData.push port
+
+    if params?
+      for param in params
+        inPorts[param].control = true
+        if inPorts[param].required
+          mustHave.push param
+        getPortData.push param
+
+    # add to the [vars]
+    if getPortData.length > 1
+      for port in getPortData
+        # because we cannot use reserved words
+        port = 'ins' if port is 'in'
+        getDataString += port + ', '
+      # remove trailing comma + space
+      getDataString = getDataString.slice(0, -2) + "]"
+    else
+      getDataString = getPortData[0]
+      # because we cannot use reserved words
+      if getDataString is 'in'
+        getDataString = 'ins'
+
+    getDataString += " = input.getData "
+    for port in getPortData
+      getDataString += "'#{port}', "
+    # remove trailing comma + space
+    getDataString = getDataString.slice(0, -2)
+
+    # --- PRECONDITION ---
+    precondition = 'return unless input.has '
+    for must in mustHave
+      precondition += "'#{must}', "
+    precondition += "(ip) -> ip.type is 'data'"
+
+    [precondition, getDataString]
+
+  replaceInputOutDone: (wirePatternCode, wirepattern, outs, ins, args) ->
+    # if args[0] in ins
+    # payloadRe = new RegExp(args[0], "gm")
+    # if payloadRe.test wirepattern
+    #   wirePatternCode = wirePatternCode.replace new RegExp(args[0] + '\.', "gm"), ''
+    if /(input, )/.test wirepattern
+      wirePatternCode = wirePatternCode.replace /input\./g, ''
+    if /(data, )/.test wirepattern
+      wirePatternCode = wirePatternCode.replace /data\./g, ''
+
+    # @TODO: is a problem...
+    # replace argument of wirepattern with first in port
+    # if args[0] isnt 'data' or 'input'
+    inPort = if ins[0] is 'in' then 'ins' else ins[0]
+    wirePatternCode = wirePatternCode.replace new RegExp(args[0], "gm"), inPort
+
+    if outs.length is 1
+      wirePatternCode = wirePatternCode.replace /out\.send/g, 'output.send ' + outs[0] + ':'
+      wirePatternCode = wirePatternCode.replace /out\.disconnect/g, "output.ports.#{outs[0]}.disconnect"
+    else
+      if /outs.(.*)\.send/gmi.test wirePatternCode
+        wirePatternCode = wirePatternCode.replace /outs.(.*)\.send/gmi, "output.ports.$1.send"
+        wirePatternCode = wirePatternCode.replace /outs.(.*)\.disconnect/gmi, "output.ports.$1.disconnect"
+      else if /out.(.*)\.send/gmi.test wirePatternCode
+        wirePatternCode = wirePatternCode.replace /out.(.*)\.send/gmi, "output.ports.$1.send"
+        wirePatternCode = wirePatternCode.replace /out.(.*)\.disconnect/gmi, "output.ports.$1.disconnect"
+
+    # replace `c.params.name` with `name`
+    wirePatternCode = wirePatternCode.replace /(c\.params\.([a-zA-Z0-9]*))/gmi, '$2'
+    wirePatternCode = wirePatternCode.replace /done/g, 'output.done'
+    wirePatternCode = wirePatternCode.replace /callback/g, 'output.done'
+
+    wirePatternCode
+
+  getWirePatternProcArguments: (wirepattern) ->
+    args = /(?:, \()(.*)(:?\) ->)/.exec wirepattern
+    args[1].split ','
+
+  getWirePatternProperties: (wirepattern, config) ->
+    processConfigInOut = (item) ->
+      return null unless item?
+      return item if Array.isArray item
+      return [item]
+
+    ins = processConfigInOut config.in
+    outs = processConfigInOut config.out
+    params = processConfigInOut config.params
+    [ins, outs, params]
+
+  replaceReturnC: (source) ->
+    source.replace /(  c$)/gmi, ''
+
+  forwardGroups: (ins, outs, params) ->
+    forwardGroupsObj = {}
+    for inPort in ins
+      forwardGroupsObj[inPort] ?= []
+      for outPort in outs
+        forwardGroupsObj[inPort].push outPort
+
+    if params?
+      for inPort in params
+        forwardGroupsObj[inPort] ?= []
+        for outPort in outs
+          forwardGroupsObj[inPort].push outPort
+
+    # format it
+    forwardGroups = 'c.forwardBrackets = \n'
+    for port, value of forwardGroupsObj
+      for v, i in value
+        value[i] = "'#{v}'"
+      value = value.join(', ')
+      forwardGroups += indent(1) + "#{port}: [#{value}]\n"
+
+    forwardGroups
+
+  updateWirePattern: (source) ->
+    # make sure it has `wirepattern`
+    regexWP = /(noflo.helpers.WirePattern)((.|\n)*)/
+    unless regexWP.test source
+      console.error "(!) No WirePattern found"
+      return source
+
+    # --- EVERYTHING BEFORE GETCOMPONENT ---
+    beforeComponent = (/^((.|\n)*?)(?=exports)/.exec source)[1]
+
+    # --- COMPILING ---
+    # hijack `WirePattern` so it adds `config` to the
+    # remove the requires so it can be `eval`d
+    # compile so it can be loaded to get actual ports without regex
+    # withoutReqs = source.replace /([a-zA-Z0-9]+ = require.*)/gmi, ""
+    withoutReqs = source.replace beforeComponent, ""
+    withoutReq = "noflo = require 'noflo' \n"
+    withoutReq += "noflo.helpers.WirePattern = (comp, config, proc) -> comp.config = config; return comp; \n"
+    withoutReq += withoutReqs
+    compiled = cs.compile withoutReq, bare: true
+    component = eval compiled
+    c = component()
+
+    # --- PORTS & WP PARAMS ---
+    inPorts = @getFilteredPorts c.inPorts
+    outPorts = @getFilteredPorts c.outPorts
+    source = @replaceReturnC source
+
+    wirepattern = (regexWP.exec source)[0]
+    wirePatternCode = (/(?:->)((.|\n)*)/.exec wirepattern)[1]
+    args = @getWirePatternProcArguments wirepattern
+    [ins, outs, params] = @getWirePatternProperties wirepattern, c.config
+    [precondition, getDataString] = @preconditionGet source, ins, outs, inPorts, params
+    wirePatternCode = @replaceInputOutDone wirePatternCode, wirepattern, outs, ins, args
+
+    if c.config.forwardGroups
+      forwardGroups = @forwardGroups ins, outs, params
+
+    # ---- OUTPUT ---
+    # if it has only 1 output.send, do output.sendDone?
+    # or if it doesn't have it `indexOf` then say it in the logs
+    # if it has neither, add it anyway?
+
+    inPortsStr = @portsToString inPorts
+    outPortsStr = @portsToString outPorts
+    inPortsStr = indentString inPortsStr, 2
+    outPortsStr = indentString outPortsStr, 2
+
+    output = ""
+    output += beforeComponent
+    output += "exports.getComponent ->\n"
+    output += indent(1) + "c = new noflo.Component\n"
+
+    output += indent(2) + "icon: '#{c.icon}'\n" if c.icon if c.icon? and c.icon isnt ""
+    output += indent(2) + "description: '#{c.description}'\n" if c.description? and c.description isnt ""
+    output += indent(2) + "ordered: true\n" if c.config.ordered is true
+    output += indent(2) + "ordered: false\n" if c.config.ordered is false
+
+    output += indent(2) + "inPorts:\n"
+    output += inPortsStr
+
+    output += indent(2) + "outPorts:\n"
+    output += outPortsStr + "\n"
+
+    output += indentString forwardGroups, 2 if forwardGroups?
+
+    output += indent(1) + 'c.process (input, output) ->' + "\n"
+    output += indent(2) + precondition + "\n"
+    output += indent(2) + getDataString + "\n"
+    output += wirePatternCode
+
+    unless output.includes('output.done') or output.includes('output.sendDone')
+      console.log 'needs to call `done`'
+
+    @source = output
+    return output
+
+# ------
 
 class ComponentUpdater
   constructor: (@source) ->
@@ -110,7 +359,12 @@ updateFile = (path, pretend) ->
     if err
       console.error "(!) Could not read file:", err
       return
-    updater = new ComponentUpdater source
+
+    if /(noflo.helpers.WirePattern)((.|\n)*)/.test source
+      updater = new WirePatternComponentUpdater source
+    else
+      updater = new ComponentUpdater source
+
     updated = updater.update()
     if pretend
       console.log "(i) Updated source for", path

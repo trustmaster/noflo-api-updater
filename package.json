@@ -2,7 +2,13 @@
   "name": "noflo-api-updater",
   "description": "A tool to update NoFlo components to latest API",
   "author": "Vladimir Sibirov <trustmaster@kodigy.com>",
-  "version": "0.5.4",
+  "contributors": [
+    {
+      "name": "James",
+      "email": "aretecode@gmail.com"
+    }
+  ],
+  "version": "0.6.4",
   "license": "MIT",
   "engines": {
     "node": ">=0.8.0"
@@ -13,5 +19,10 @@
   "repository": {
     "type": "git",
     "url": "git://github.com/trustmaster/noflo-api-updater.git"
+  },
+  "dependencies": {
+    "coffee-script": "^1.10.0",
+    "indent-string": "^3.0.0",
+    "noflo": "0.x >= 0.7"
   }
 }
