@@ -5,7 +5,7 @@ This command-line tool automates some tasks on updating legacy NoFlo libraries w
 ## Features
 
 Currently this tool supports:
- - Semi-automatic update of the old CoffeeScript components to the new Ports API introduced in NoFlo 0.5.
+ - Semi-automatic update of the old CoffeeScript components to the new Process API introduced in NoFlo 0.8.
 
 ## Installation
 
