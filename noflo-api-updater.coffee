@@ -336,22 +336,24 @@ class ComponentUpdater
     code = ''
     for name, port of @inPorts
       code += '  ' if code.length > 0
-      code += "component.inPorts.add '#{name}', datatype: '#{port.datatype}'"
+      code += "component.inPorts.add '#{name}',\n    datatype: '#{port.datatype}'"
       if name of @listeners
         if Object.keys(@listeners[name]).length is 1
           evt = Object.keys(@listeners[name])[0]
           body = @listeners[name][evt]
-          code += ", (event, payload) ->\n    if event is '#{evt}'\n      #{body}\n"
+          body = body.replace 'payload', 'ip.data'
+          code += "\n    handle: (ip) ->\n      return unless ip.type is '#{evt}'\n      #{body}\n"
         else
-          code += ", (event, payload) ->\n    switch event\n"
+          code += "\n    handle: (ip) ->\n      switch ip.type\n"
           for evt, body of @listeners[name]
             # Increase body indent
             body = body.replace /(^|\n)( {2})/g, '$1$2  '
+            body = body.replace 'payload', 'ip.data'
             code += "      when '#{evt}'\n        #{body}\n"
       else
         code += "\n"
     for name, port of @outPorts
-      code += "  component.outPorts.add '#{name}', datatype: '#{port.datatype}'\n"
+      code += "  component.outPorts.add '#{name}',\n    datatype: '#{port.datatype}'\n"
     return code
 
 updateFile = (path, pretend) ->
