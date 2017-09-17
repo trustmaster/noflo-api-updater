@@ -1,5 +1,6 @@
 #!/usr/bin/env coffee
 fs = require 'fs'
+path = require 'path'
 indentString = require 'indent-string'
 cs = require 'coffee-script'
 
@@ -356,8 +357,17 @@ class ComponentUpdater
       code += "  component.outPorts.add '#{name}',\n    datatype: '#{port.datatype}'\n"
     return code
 
-updateFile = (path, pretend) ->
-  fs.readFile path, 'utf8', (err, source) ->
+backupFile = (filePath, source) ->
+  dirname = path.dirname filePath
+  filename = path.basename filePath
+  backupPath = "#{dirname}/backup/#{filename}"
+  if not fs.existsSync "#{dirname}/backup"
+    fs.mkdirSync "#{dirname}/backup"
+  if not fs.existsSync backupPath
+    fs.writeFileSync backupPath, source, 'utf8'
+
+updateFile = (filePath, pretend) ->
+  fs.readFile filePath, 'utf8', (err, source) ->
     if err
       console.error "(!) Could not read file:", err
       return
@@ -369,36 +379,37 @@ updateFile = (path, pretend) ->
 
     updated = updater.update()
     if pretend
-      console.log "(i) Updated source for", path
+      console.log "(i) Updated source for", filePath
       console.log updated
     else
-      fs.writeFile path, updated, 'utf8', (err) ->
+      backupFile filePath, source
+      fs.writeFile filePath, updated, 'utf8', (err) ->
         if err
           console.error "(!) Could not read file:", err
         else
-          console.log "(+) Updated: ", path
+          console.log "(+) Updated: ", filePath
 
 switch process.argv.length
   when 4
     mode = process.argv[2]
-    path = process.argv[3]
+    filePath = process.argv[3]
   when 3
     mode = false
-    path = process.argv[2]
+    filePath = process.argv[2]
   else
     console.log "Format: noflo-api-updater [--pretend] <path-to-components>"
     process.exit 0
 
-if !fs.existsSync path
-  console.error "(!) Path not found: ", path
+if !fs.existsSync filePath
+  console.error "(!) Path not found: ", filePath
   process.exit 1
 
 pretend = mode is '--pretend'
 isCoffee = /\.coffee$/
 
-if isCoffee.test path
-  updateFile path, pretend
+if isCoffee.test filePath
+  updateFile filePath, pretend
 else
-  fs.readdir path, (err, files) ->
+  fs.readdir filePath, (err, files) ->
     for file in files
-      updateFile "#{path}/#{file}", pretend if isCoffee.test file
+      updateFile "#{filePath}/#{file}", pretend if isCoffee.test file
