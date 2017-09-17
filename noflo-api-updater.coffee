@@ -335,26 +335,38 @@ class ComponentUpdater
 
   makePorts: ->
     code = ''
+    process = ''
     for name, port of @inPorts
       code += '  ' if code.length > 0
-      code += "component.inPorts.add '#{name}',\n    datatype: '#{port.datatype}'"
+      code += "component.inPorts.add '#{name}',\n    datatype: '#{port.datatype}'\n"
       if name of @listeners
         if Object.keys(@listeners[name]).length is 1
           evt = Object.keys(@listeners[name])[0]
           body = @listeners[name][evt]
-          body = body.replace 'payload', 'ip.data'
-          code += "\n    handle: (ip) ->\n      return unless ip.type is '#{evt}'\n      #{body}\n"
+          process += "
+                if input.port.name is '#{name}' and input.ip.type is '#{evt}'
+                  payload = input.getData '#{name}'
+                  #{body}
+                  # FIXME send output data correctly
+                  return output.sendDone()\n
+          "
         else
-          code += "\n    handle: (ip) ->\n      switch ip.type\n"
+          process += """
+            if input.port.name is '#{name}'
+              ip = input.get '#{name}'
+              payload = ip.data
+              switch ip.type
+              """
           for evt, body of @listeners[name]
             # Increase body indent
             body = body.replace /(^|\n)( {2})/g, '$1$2  '
-            body = body.replace 'payload', 'ip.data'
-            code += "      when '#{evt}'\n        #{body}\n"
+            process += "      when '#{evt}'\n        #{body}\n"
       else
         code += "\n"
     for name, port of @outPorts
       code += "  component.outPorts.add '#{name}',\n    datatype: '#{port.datatype}'\n"
+    if process isnt ''
+      code += "  component.process (input, output) ->\n    #{process}\n"
     return code
 
 backupFile = (filePath, source) ->
